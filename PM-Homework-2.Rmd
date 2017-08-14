@@ -26,19 +26,20 @@ colnames(airports) <- c("ID", "name", "city", "country", "IATA_FAA", "ICAO", "la
 
 airportlatlon <- subset(airports, select = c(IATA_FAA, lat, lon))
 
-#abiaorigin = merge(abiaorigin, airportlatlon, by.x = "Dest", by.y = "IATA_FAA")
-abiadest = merge(abiadest, airportlatlon, by.x = "Origin", by.y = "IATA_FAA")
-destdata = abiadest[,c("lat","lon","Turnaround","Month")]
+abiaorigin = merge(abiaorigin, airportlatlon, by.x = "Dest", by.y = "IATA_FAA")
+#abiadest = merge(abiadest, airportlatlon, by.x = "Origin", by.y = "IATA_FAA")
+origindata = abiaorigin[,c("lat","lon","Turnaround","Month")]
+average = aggregate(origindata[, 3], list(origindata$lat, origindata$lon), mean)
+origindataturnaround = merge(origindata, average, by.x = c("lat","lon"), by.y = c("Group.1","Group.2"))
 
 abialatlon <- filter(airportlatlon, IATA_FAA=="AUS") #separate df for abia
 
-head (abiaorigin)
 usa <- map_data("usa")
-dest <- gather(data = destdata, -lon, -lat, -Turnaround, key = "var", value = "value")
-ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group), fill = NA, color = "black") + coord_fixed(1.3) + 
-geom_curve(data=dest, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = Turnaround), size = .01, curvature = .2) + 
- geom_point(data=dest, aes(x = lon, y = lat), col = "yellow") +facet_wrap(~value, scales = "free")
-
+origin <- gather(data = origindataturnaround, -lon, -lat, -x, -Turnaround, key = "var", value = "value")
+ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
+geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = x), size = .01, curvature = .2) + 
+ geom_point(data=origin, aes(x = lon, y = lat), col = "red", shape = ".") + scale_colour_gradient2()# +facet_wrap(~value, scales = "free")
+#What this is showing us is average turnaround time for flights departing from AUS. Redder curves have a faster turnaround time at AUS, purple-er times have a slower turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time.
 
 
 ```
