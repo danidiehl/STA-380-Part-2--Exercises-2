@@ -16,24 +16,27 @@ library(mapdata)
 library(tidyr)
 
 abia <- read.csv("C:/users/jessc/documents/predictivemodeling/abia.csv")
+abia$Turnaround <- abia$ArrDelay - abia$DepDelay
+abia[is.na(abia)] <- 0
 abiaorigin <- filter(abia, Origin =="AUS")
 abiadest <- filter(abia, Dest =="AUS")
 airports <- read.csv("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat", header = FALSE)
 colnames(airports) <- c("ID", "name", "city", "country", "IATA_FAA", "ICAO", "lat", "lon", "altitude", "timezone", "DST")
 
+
 airportlatlon <- subset(airports, select = c(IATA_FAA, lat, lon))
 
 #abiaorigin = merge(abiaorigin, airportlatlon, by.x = "Dest", by.y = "IATA_FAA")
 abiadest = merge(abiadest, airportlatlon, by.x = "Origin", by.y = "IATA_FAA")
-destdata = abiadest[,c("lat","lon","Month")]
+destdata = abiadest[,c("lat","lon","Turnaround","Month")]
 
 abialatlon <- filter(airportlatlon, IATA_FAA=="AUS") #separate df for abia
 
 head (abiaorigin)
 usa <- map_data("usa")
-dest <- gather(data = destdata, -lon, -lat, key = "var", value = "value")
-ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
-geom_curve(data=dest, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat), col = "turquoise", size = .01, curvature = .2) + 
+dest <- gather(data = destdata, -lon, -lat, -Turnaround, key = "var", value = "value")
+ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group), fill = NA, color = "black") + coord_fixed(1.3) + 
+geom_curve(data=dest, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = Turnaround), size = .01, curvature = .2) + 
  geom_point(data=dest, aes(x = lon, y = lat), col = "yellow") +facet_wrap(~value, scales = "free")
 
 
