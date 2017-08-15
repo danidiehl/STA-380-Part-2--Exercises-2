@@ -74,9 +74,18 @@ for(author in authors){
 	{ lapply(., tail, n=2) } %>%
 	{ lapply(., paste0, collapse = '') } %>%
 	unlist)
-  
   assign(author,setNames(as.list(eval(parse(text = author))), eval(parse(text = nam2))))
-}
+  docs <- paste(author,"_documents", sep="")
+  assign(docs, Corpus(VectorSource(eval(parse(text = author)))))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(tolower)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeNumbers)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removePunctuation)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(stripWhitespace)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), stopwords("en")))
+  dtm <- paste("dtm_",author,sep="")
+  assign(dtm, DocumentTermMatrix(eval(parse(text=docs))))
+  #assign(dtm, removeSparseTerms(eval(parse(text=docs)),0.95))
+    }
 
  # print(names(eval(parse(text = nam2))))
   #n <- paste("names(",author,")",sep="")
