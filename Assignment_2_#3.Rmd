@@ -19,7 +19,7 @@ grocery <- read.transactions('groceries.txt', sep=',')
 summary(grocery)
 inspect(grocery[1:5])
 
-itemFrequencyPlot(grocery, topN = 20) #look at frequent items 
+itemFrequencyPlot(grocery, topN = 20) 
 
 rules <- apriori(grocery, parameter=list(support=0.01, confidence=0.5, maxlen=6))
 inspect(rules[1:5])
@@ -30,36 +30,54 @@ summary(rules)
 
 ```
 
-Support=Number of transactions with both A and B / Total number of transactions=P(A∩B)
+After reading in the grocery dataset, we first look at the item frequency plot to look at frequent items. We randomly chosen support of 0.01 and confidence of 0.5 values to start off, but we will try different values pairs to see which balance of values will result in the number of rules that will be most beneficial for our analysis. 
 
-Confidence=Number of transactions with both A and B / Total number of transactions with A=P(A∩B) / P(A)
 
-ExpectedConfidence=Number of transactions with B / Total number of transactions=P(B)
+Support = Number of transactions with both A and B / Total number of transactions=P(A∩B)
 
-Lift=Confidence / Expected Confidence=P(A∩B) / P(A)*P(B)
+Confidence = Number of transactions with both A and B / Total number of transactions with A=P(A∩B) / P(A)
 
+Expected Confidence = Number of transactions with B / Total number of transactions=P(B)
+
+Lift=Confidence / Expected Confidence = P(A∩B) / P(A)*P(B)
+
+##Interactive inspect with datatable
+
+So here we can play around with different set of values for support and confidence to see in datatable form to see different pairs for market basket analysis. When we set rules3 with support of 0.01 and confidence of 0.5, we can see 15 entries that show LHS of curd, yogurt, butter, eggs, whipped/sour cream, before buying whole milk (RHS), which makes sense as they all need to be refrigerated and therefore probably located closer together. Rules4 with support of 0.001 and confidence of 0.8 reveal much bigger datatable with 410 entries that reveal liquor, red/blush wine purchased with bottled beer which are all alcohol and make sense to buy them together and also reveals cereal as part of the pairs before buying whole milk. 
+
+As we perform more visualizations to find patterns within these baskets as well as setting different rules, we will re-adjust our confidence and support values to maximize the effectiveness of our analysis. 
+
+```{r}
+rules3 <- apriori(grocery, parameter=list(support=0.01, confidence=0.5))
+rules4 <- apriori(grocery, parameter=list(support=0.001, confidence=0.8))
+inspectDT(rules3) #if we want highest support 15 entries 
+inspectDT(rules4) #if we want wider association with 410 entries
+```
 ## Visualizations
 
 ```{r}
-rules_sorted <- sort(groceryrules, by='confidence', decreasing=TRUE)
+rules_sorted <- sort(rules, by='confidence', decreasing=TRUE)
 #matrix representation
-plot(groceryrules[1:20], method = 'matrix', control = list(reorder=TRUE))
+plot(rules[1:20], method = 'matrix', control = list(reorder=TRUE))
 #Interactive Scatterplot 
 plotly_arules(groceryrules)
 
-plot(groceryrules, method = 'graph', interactive=TRUE, shading=NA)
-subrules <- head(sort(groceryrules, by='lift'),10) #Graph just 10 rules by 10 highest lifts 
+#plot(groceryrules, method = 'graph', interactive=TRUE, shading=NA)
+subrules <- head(sort(rules, by='lift'),10) #Graph just 10 rules by 10 highest lifts 
 plot(subrules, method='graph')
-plot(groceryrules, method='grouped') #Grouped Matrix shows LHS and RHS 
+plot(rules, method='grouped') #Grouped Matrix shows LHS and RHS 
 plot(subrules,method='paracoord', control=list(reorder=TRUE)) #Parallel Coordinates plot for 10 rules 
 
 ```
-People tend to buy semi.finished.breads and margarine before ready soups 
-so we should put those items close to the ready soups isle. 
-Also, people tend to buy citrus fruit, soda, canned/bottled beer, and shopping bags before they buy margarine and ready.soups. 
-When they buy whole milk together with ready soups, they tend to buy other vegetables.
 
-# How to get the product recommendation rules?
+People tend to buy semi finished breads and margarine before ready soups 
+so we should put those items close to the ready soups isle. 
+Also, people tend to buy citrus fruit, soda, canned/bottled beer, and shopping bags before they buy margarine and ready soups. 
+When they buy whole milk together with ready soups, they tend to buy other vegetables. 
+Also, people tend to buy baking powder, sugar, flour, and eggs before buying margarine, which sounds like they are buying items for baking. 
+
+
+# Getting the product recommendation rules
 
 ```{r}
 rules_conf <- sort(rules, by='confidence', decreasing=TRUE)
@@ -68,6 +86,7 @@ inspect(head(rules_conf)) #High-confidence rules
 rules_lift <- sort(rules, by='lift', decreasing=TRUE)
 inspect(head(rules_lift)) #High lift rules 
 ```
+
 The rules with confidence of 1 imply that, whenever the LHS item was purchased, the RHS item was also purchased 100% of the time.
 So in our grocery rules, if one buys citrus fruit and root vegetables, there's 58.6% chance they will buy other vegetables. 
 
@@ -75,29 +94,22 @@ A rule with a lift of 3 imply that, the items in LHS and RHS are 3 times more li
 
 # Targeting Items 
 - what are customers likely to buy before or after this item
-What are people buying before they buy ready soups?
+What are people buying before they buy margarine?
 
-Tend to buy citrus.fruit, kitchen towels. Consider when planning isles 
+Tend to buy bottled water, eggs, and tropic fruit. Flour and tropical fruit as lhs scored higher on support and slightly less confidence, so we consider this as well when placing items on isles or for target coupon marketing. 
 
 ```{r}
-rules <- apriori(data=grocery, parameter=list(supp=0.001, conf=0.08), appearance = list(default = 'lhs', rhs = 'ready.soups='), control=list(verbose=F))
+rules <- apriori(data=grocery, parameter=list(supp=0.001, conf=0.08), appearance = list(default = 'lhs', rhs = 'margarine'), control=list(verbose=F))
 rules <- sort(rules, decreasing=TRUE, by='confidence')
 inspect(rules[1:5])
 ```
+
 What are people buying after they buy ready soups? 
 ```{r}
-rules2 <- apriori(data=grocery, parameter=list(supp=0.001, conf=0.08), appearance = list(default = 'rhs', lhs = 'ready.soups='), control=list(verbose=F))
+rules2 <- apriori(data=grocery, parameter=list(supp=0.01, conf=0.1), appearance = list(default = 'rhs', lhs = 'margarine'), control=list(verbose=F))
 rules2 <- sort(rules2, by='confidence', decreasing=TRUE)
 inspect(rules2)
 ```
-They tend to buy margarine and semi.finished.bread before ready soups. 
 
-##Interactive inspect with datatable
-```{r}
-rules3 <- apriori(grocery, parameter=list(support=0.005, confidence=0.5))
-rules4 <- apriori(grocery, parameter=list(support=0.05, confidence=0.5))
-inspectDT(rules3) #if we want highest support 9 pairs 
-inspectDT(rules4) #if we want wider association with 170 entries 
-```
-
+They tend to buy whole milk, other vegetables, rolls/buns, and yogurt after buying margarine. Whole milk and yogurt should be placed in the dairy section near margarine, so this chain association does make sense. 
 
