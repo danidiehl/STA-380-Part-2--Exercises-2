@@ -41,7 +41,7 @@ origin <- gather(data = origindataturnaround, -lon, -lat, -x, -Turnaround, key =
 ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
 geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = x), size = .01, curvature = .2) + 
  geom_point(data=origin, aes(x = lon, y = lat), col = "red", shape = ".") + scale_colour_gradient2()# + facet_wrap(~value, scales = "free")
-#What this is showing us is average turnaround time for flights departing from AUS. Redder curves have a faster turnaround time at AUS, purple-er times have a slower turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time.
+#What this is showing us is average turnaround time for flights departing from AUS. Redder curves have a slower turnaround time at AUS, purple-er times have a faster turnaround time. Ie, the flights to PHL had a super slow turnaround time, while the flights to SEA,MSP,CLT on average have a faster turnaround time.
 
 
 ```
@@ -58,11 +58,13 @@ readerPlain = function(fname){
 				readPlain(elem=list(content=readLines(fname)), 
 							id=fname, language='en') }
 
+#Also, be sure to change the name of Lynne O'Donnell to remove the apostrophe
 pathname = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/"
-train = paste(pathname,"C50train/", sep="")					
+train = paste(pathname,"C50train/", sep="")
+test =paste(pathname,"C50test/", sep="")
 authors = list.dirs(train, full.names = FALSE)[-1]
-
-
+list_dtms_strings = c()
+#For each author, create a corpus/document term matrix with removed sparse terms
 for(author in authors){
   nam <- paste("articles_", author, sep = "")
   file = paste(train,author,"/*.txt",sep="")
@@ -81,106 +83,23 @@ for(author in authors){
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeNumbers)))
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removePunctuation)))
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(stripWhitespace)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), stopwords("en")))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), c(stopwords("SMART"),"character")))
   dtm <- paste("dtm_",author,sep="")
-  assign(dtm, DocumentTermMatrix(eval(parse(text=docs))))
-  #assign(dtm, removeSparseTerms(eval(parse(text=docs)),0.95))
+  assign(dtm, TermDocumentMatrix(eval(parse(text=docs)), control = list(wordLengths = c(3,10))))
+  assign(dtm, removeSparseTerms(eval(parse(text=dtm)),0.95))
+  list_dtms_strings <-  append(list_dtms_strings, dtm)
     }
+#
 
- # print(names(eval(parse(text = nam2))))
-  #n <- paste("names(",author,")",sep="")
-  #eval(parse(text = n))<-eval(parse(text = nam2))
- # assign(names(eval(parse(text = author))), eval(parse(text = nam2)))
-file_list = Sys.glob(paste(train,"SimonCowell/*.txt",sep=""))
-simon = lapply(file_list, readerPlain) 
+list_dtms1 <- lapply(1:length(list_dtms_strings), function(x) eval(parse(text=list_dtms_strings[x])))
+top_words1 <- lapply(1:length(list_dtms1), function(x)  sort(rowSums(as.matrix(list_dtms1[[x]])), decreasing=TRUE))
 
-# Some more concise document names via basic string manipulation
-# really should be using regex's for this
-file_list
+library(plyr)
+top_words_df <- t(ldply(1:length(top_words1), function(i)  head(names(top_words1[[i]]),20)))
+colnames(top_words_df) <- lapply(1:length(list_dtms1), function(i) list_dtms_strings[i])
 
-# Clean up the file names
-# This uses the piping operator from magrittr
-# Also uses anonymous functions.
-# See https://cran.r-project.org/web/packages/magrittr/vignettes/magrittr.html
-mynames = file_list %>%
-	{ strsplit(., '/', fixed=TRUE) } %>%
-	{ lapply(., tail, n=2) } %>%
-	{ lapply(., paste0, collapse = '') } %>%
-	unlist
-	
-mynames
-names(simon) = mynames
+#Returns top 20 words for each author
+top_words_df
 
-## once you have documents in a vector, you 
-## create a text mining 'corpus' with: 
-my_documents = Corpus(VectorSource(simon))
-
-## Some pre-processing/tokenization steps.
-## tm_map just maps some function to every document in the corpus
-
-my_documents = tm_map(my_documents, content_transformer(tolower)) # make everything lowercase
-my_documents = tm_map(my_documents, content_transformer(removeNumbers)) # remove numbers
-my_documents = tm_map(my_documents, content_transformer(removePunctuation)) # remove punctuation
-my_documents = tm_map(my_documents, content_transformer(stripWhitespace)) ## remove excess white-space
-
-## Remove stopwords.  Always be careful with this: one man's trash is another one's treasure.
-stopwords("en")
-stopwords("SMART")
-?stopwords
-my_documents = tm_map(my_documents, content_transformer(removeWords), stopwords("en"))
-
-
-## create a doc-term-matrix
-DTM_simon = DocumentTermMatrix(my_documents)
-DTM_simon # some basic summary statistics
-
-class(DTM_simon)  # a special kind of sparse matrix format
-
-## You can inspect its entries...
-inspect(DTM_simon[1:10,1:20])
-
-## ...find words with greater than a min count...
-findFreqTerms(DTM_simon, 50)
-
-## ...or find words whose count correlates with a specified word.
-findAssocs(DTM_simon, "market", .5) 
-
-## Finally, drop those terms that only occur in one or two documents
-## This is a common step: the noise of the "long tail" (rare terms)
-##	can be huge, and there is nothing to learn if a term occured once.
-## Below removes those terms that have count 0 in >95% of docs.  
-## Probably a bit stringent here... but only 50 docs!
-DTM_simon = removeSparseTerms(DTM_simon, 0.95)
-DTM_simon # now ~ 1000 terms (versus ~3000 before)
-
-# Now PCA on term frequencies
-X = as.matrix(DTM_simon)
-X = X/rowSums(X)  # term-frequency weighting
-
-pca_simon = prcomp(X, scale=TRUE)
-plot(pca_simon) 
-
-# Look at the loadings
-pca_simon$rotation[order(abs(pca_simon$rotation[,1]),decreasing=TRUE),1][1:25]
-pca_simon$rotation[order(abs(pca_simon$rotation[,2]),decreasing=TRUE),2][1:25]
-
-
-## Plot the first two PCs..
-plot(pca_simon$x[,1:2], xlab="PCA 1 direction", ylab="PCA 2 direction", bty="n",
-     type='n')
-text(pca_simon$x[,1:2], labels = 1:length(simon), cex=0.7)
-identify(pca_simon$x[,1:2], n=4)
-
-# Both about "Scottish Amicable"
-content(simon[[46]])
-content(simon[[48]])
-
-# Both about genetic testing
-content(simon[[25]])
-content(simon[[26]])
-
-# Both about Ladbroke's merger
-content(simon[[10]])
-content(simon[[11]])
 
 ```
