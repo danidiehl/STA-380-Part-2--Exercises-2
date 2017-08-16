@@ -44,6 +44,7 @@ geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abia
  geom_point(data=origin, aes(x = lon, y = lat), col = "red", shape = ".") + scale_colour_gradient2()# + facet_wrap(~value, scales = "free")
  
 ```
+
 Q: Is the late departure caused from the late arrival? Or did the airport contribute to make the delay time worse? 
 What this is showing us is the number of minutes the airport contributes to a delay. If the average number is very negative, this means the airport is contributing a lot of time to the delay. Redder curves have a slower turnaround time at AUS, purple-er times have a faster turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time. 
 
@@ -144,7 +145,8 @@ inspectDT(rules4) #if we want wider association with 410 entries
 ```{r}
 rules_sorted <- sort(rules, by='confidence', decreasing=TRUE)
 #matrix representation
-plot(rules[1:20], method = 'matrix', control = list(reorder=TRUE))
+#plot(rules[1:20], method = 'matrix', control = list(reorder=TRUE))
+
 #Interactive Scatterplot 
 plotly_arules(rules)
 
@@ -155,6 +157,9 @@ plot(rules, method='grouped') #Grouped Matrix shows LHS and RHS
 plot(subrules,method='paracoord', control=list(reorder=TRUE)) #Parallel Coordinates plot for 10 rules 
 
 ```
+
+The lift for {tropical fruit, root vegetables}-->{other vegetables} is very high. This means there is a strong association between these things. If we know a person bought tropical fruit and root vegetables, the person is much more likley to buy other vegetables. 
+The support for {other vegetables,yogurt}-->{whole milk} is very high. This means there is a large proportion of all baskets that had all three of these items.
 
 People tend to buy semi finished breads and margarine before ready soups 
 so we should put those items close to the ready soups isle. 
@@ -179,8 +184,7 @@ So in our grocery rules, if one buys citrus fruit and root vegetables, there's 5
 A rule with a lift of 3 implies that, the items in LHS and RHS are 3 times more likely to be purchased together compared to the purchases when they are assumed to be unrelated, which is for the same LHS-RHS pair of {citrus fruit, root vegetables} -> {other vegetables}.
 
 #### Targeting Items 
-- what are customers likely to buy before or after this item
-What are people buying before they buy margarine?
+- What are customers likely to buy before or after this item? What are people buying before they buy margarine?
 
 Tend to buy bottled water, eggs, and tropic fruit. Flour and tropical fruit as lhs scored higher on support and slightly less confidence, so we consider this as well when placing items on isles or for target coupon marketing. 
 
