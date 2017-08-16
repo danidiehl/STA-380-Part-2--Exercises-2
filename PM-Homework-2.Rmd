@@ -41,7 +41,8 @@ origin <- gather(data = origindataturnaround, -lon, -lat, -x, -Turnaround, key =
 ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
 geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = x), size = .01, curvature = .2) + 
  geom_point(data=origin, aes(x = lon, y = lat), col = "red", shape = ".") + scale_colour_gradient2()# + facet_wrap(~value, scales = "free")
-#What this is showing us is average turnaround time for flights departing from AUS. Redder curves have a faster turnaround time at AUS, purple-er times have a slower turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time.
+#Is the late departure caused from the late arrival? Or did the airport make the delay time worse? 
+#What this is showing us is the number of minutes the airport contributes to a delay. If the average number is very negative, this means the airport is contributing a lot of time to the delay. Redder curves have a slower turnaround time at AUS, purple-er times have a faster turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time. 
 
 
 ```
