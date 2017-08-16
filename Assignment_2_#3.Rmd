@@ -41,7 +41,7 @@ Expected Confidence = Number of transactions with B / Total number of transactio
 
 Lift=Confidence / Expected Confidence = P(A∩B) / P(A)*P(B)
 
-##Interactive inspect with datatable
+## Interactive inspect with datatable
 
 So here we can play around with different set of values for support and confidence to see in datatable form to see different pairs for market basket analysis. When we set rules3 with support of 0.01 and confidence of 0.5, we can see 15 entries that show LHS of curd, yogurt, butter, eggs, whipped/sour cream, before buying whole milk (RHS), which makes sense as they all need to be refrigerated and therefore probably located closer together. Rules4 with support of 0.001 and confidence of 0.8 reveal much bigger datatable with 410 entries that reveal liquor, red/blush wine purchased with bottled beer which are all alcohol and make sense to buy them together and also reveals cereal as part of the pairs before buying whole milk. 
 
