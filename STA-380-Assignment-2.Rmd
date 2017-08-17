@@ -59,11 +59,14 @@ readerPlain = function(fname){
 				readPlain(elem=list(content=readLines(fname)), 
 							id=fname, language='en') }
 
-pathname= "/Users/daniellediehl/Documents/MSBA/Predictive_Modeling/STA380/data/ReutersC50"
+#Also, be sure to change the name of Lynne O'Donnell to remove the apostrophe
 #pathname = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/"
-train = paste(pathname,"C50train/", sep="")					
+pathname= "/Users/daniellediehl/Documents/MSBA/Predictive_Modeling/STA380/data/ReutersC50/"
+train = paste(pathname,"C50train/", sep="")
+test =paste(pathname,"C50test/", sep="")
 authors = list.dirs(train, full.names = FALSE)[-1]
-
+list_dtms_strings = c()
+#For each author, create a corpus/document term matrix with removed sparse terms
 for(author in authors){
   nam <- paste("articles_", author, sep = "")
   file = paste(train,author,"/*.txt",sep="")
@@ -82,11 +85,24 @@ for(author in authors){
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeNumbers)))
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removePunctuation)))
   assign(docs, tm_map(eval(parse(text = docs)), content_transformer(stripWhitespace)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), stopwords("en")))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), c(stopwords("SMART"),"character")))
   dtm <- paste("dtm_",author,sep="")
-  assign(dtm, DocumentTermMatrix(eval(parse(text=docs))))
-  #assign(dtm, removeSparseTerms(eval(parse(text=docs)),0.95))
+  assign(dtm, TermDocumentMatrix(eval(parse(text=docs)), control = list(wordLengths = c(3,10))))
+  assign(dtm, removeSparseTerms(eval(parse(text=dtm)),0.95))
+  list_dtms_strings <-  append(list_dtms_strings, dtm)
     }
+#
+
+list_dtms1 <- lapply(1:length(list_dtms_strings), function(x) eval(parse(text=list_dtms_strings[x])))
+top_words1 <- lapply(1:length(list_dtms1), function(x)  sort(rowSums(as.matrix(list_dtms1[[x]])), decreasing=TRUE))
+
+library(plyr)
+top_words_df <- t(ldply(1:length(top_words1), function(i)  head(names(top_words1[[i]]),20)))
+colnames(top_words_df) <- lapply(1:length(list_dtms1), function(i) list_dtms_strings[i])
+
+#Returns top 20 words for each author
+top_words_df
+
 ```
 
 ##Q3. Practice with association rule mining
