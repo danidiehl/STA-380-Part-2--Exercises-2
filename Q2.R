@@ -28,7 +28,7 @@ names(all_docs) = file_list
 names(all_docs) = sub('.txt', '', names(all_docs))
 
 my_corpus = Corpus(VectorSource(all_docs))
-names(my_corpus) = file_list
+#names(my_corpus) = file_list
 
 
 # Preprocessing
@@ -48,13 +48,17 @@ inspect(DTM[1:10,1:20])
 DTM = removeSparseTerms(DTM, 0.975)
 DTM
 
+
 # Now a dense matrix
 X = as.matrix(DTM)
 row.names(X)=file_list
 colnames(X)
 rownames(X)
+ncol(X)
 
+write.csv(X,"train1.csv")
 
+classificationnames = rep(authornames, each=50)
 
 
 
