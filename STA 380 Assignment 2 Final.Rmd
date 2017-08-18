@@ -1,0 +1,392 @@
+---
+title: "STA-380-Assignment-2"
+author: "Jess Chung, Dani Diehl, Gihani Dissanayake, Chloe Kwon"
+date: "August 16, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Question 1
+
+###Flights at ABIA
+
+Our goal here is to establish an understanding of the cause behind late departures from Austin. Is the late departure caused by the plane's late arrival? Or did the airport itself extend the delay?
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(tidyr)
+
+abia <- read.csv("https://raw.githubusercontent.com/jgscott/STA380/master/data/ABIA.csv")
+abia$Turnaround <- abia$ArrDelay - abia$DepDelay
+abia[is.na(abia)] <- 0
+abiaorigin <- filter(abia, Origin =="AUS")
+abiaorigin <- abiaorigin[(abiaorigin$Dest != "DSM")&(abiaorigin$Dest != "DTW"),]
+
+#abiadest <- filter(abia, Dest =="AUS")
+airports <- read.csv("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat", header = FALSE)
+colnames(airports) <- c("ID", "name", "city", "country", "IATA_FAA", "ICAO", "lat", "lon", "altitude", "timezone", "DST")
+
+
+airportlatlon <- subset(airports, select = c(IATA_FAA, lat, lon))
+
+abiaorigin = merge(abiaorigin, airportlatlon, by.x = "Dest", by.y = "IATA_FAA")
+#abiadest = merge(abiadest, airportlatlon, by.x = "Origin", by.y = "IATA_FAA")
+origindata = abiaorigin[,c("lat","lon","Turnaround","Month")]
+average = aggregate(origindata[, 3], list(origindata$lat, origindata$lon), mean)
+origindataturnaround = merge(origindata, average, by.x = c("lat","lon"), by.y = c("Group.1","Group.2"))
+
+abialatlon <- filter(airportlatlon, IATA_FAA=="AUS") #separate df for abia
+
+usa <- map_data("usa")
+origin <- gather(data = origindataturnaround, -lon, -lat, -x, -Turnaround, key = "var", value = "value")
+ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
+geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = x), size = .01, curvature = .2) + 
+ geom_point(data=origin, aes(x = lon, y = lat), col = "lightgreen", shape = "x") + scale_colour_gradient2()# + facet_wrap(~value, scales = "free")
+ 
+```
+
+By adding turn around time (the difference between the departure delay and the arrival delay) as a variable, we were able to view average delays with regards to different flights and then use that additional information to determine how much the Austin airport contributes to the delay of a flight. We wanted to excuse airports from flights that arrive late and then depart late, but the airport did not extend the delay further.
+
+The graph shows the culmination of our analysis, which is the number of minutes the airport contributes to the delay. The redder routes have a slower turnaround time at the Austin airport, and blue routes have a faster turnaround time. For example, AUS was able to speed up the average turnaround tme for the flights to SEA, MSP, and CLT, while the flights to PHL on average was slowed down at AUS, and thus had a slower turnaround time. 
+
+We removed outliers such as th single flight from Des Moines, and the resulting range is fairly small: from the Austin airport extending the delay by 20 min to reducing the delay by 8 minutes. This small range is not surprising, as the internal processes for processing a plane through an airport is fairly consistent. Maybe we would see a broader range or some outliers in the data if international flights were taken into account, since those are a little more complicated and could thus extend delays.
+
+
+Though the above is very interesting and useful for holding airlines and airports accountable, it is more relevent to actual fliers what their delay will likely be, not necessarily what the cause of that delay is. 
+```{r}
+
+#create a figure or series of figures that tell interesting story about data
+#What is the best time of day to fly to minimize delays?
+#What is the best time of year to fly to minimize delays?
+#How do patterns of flights to different destinations or parts of the country change over the course of the year?
+#What are the bad airports to fly to?
+
+library(ggplot2)
+library(lattice)
+library(grid)
+library(gridExtra)
+
+airline<- read.csv('https://raw.githubusercontent.com/jgscott/STA380/master/data/ABIA.csv',header=TRUE)
+names(airline)
+attach(airline)
+
+###departure delays###
+dest_dep_delay<-aggregate(DepDelay~Origin, airline, mean)
+
+dest_dep_delay[order(dest_dep_delay$DepDelay),]
+
+top20worst_depdelays<-tail(dest_dep_delay[order(dest_dep_delay$DepDelay),],20)
+top20worst_depdelays$Origin <- factor(top20worst_depdelays$Origin, levels = top20worst_depdelays$Origin[order(top20worst_depdelays$DepDelay)])
+
+ggplot(top20worst_depdelays, aes(Origin, DepDelay)) + geom_bar(stat='identity')
+```
+
+Based on the information above, if the plane's origin is Birmingham  or Knoxville, you should expect greater delays. Both of these are also partially military airports, which counld account for the additional depay. However, this table doesn't take seasonal changes into account, thus we consider a month to month breakdown below.
+
+```{r}
+
+####loop for all the months###  
+p<-list()
+for (i in 1:12) {
+  dest_dep_delay<-aggregate(DepDelay~Origin, subset(airline, airline['Month']==i), mean)
+  #sort(dest_dep_delay$DepDelay, decreasing=TRUE)
+  dest_dep_delay[order(dest_dep_delay$DepDelay),]
+  
+  top20worst_depdelays<-tail(dest_dep_delay[order(dest_dep_delay$DepDelay),],10)
+  top20worst_depdelays$Origin <- factor(top20worst_depdelays$Origin, levels = top20worst_depdelays$Origin[order(top20worst_depdelays$DepDelay)])
+  
+  par(mfrow=c(3,4))
+  p[[i]]<-ggplot(top20worst_depdelays, aes(Origin, DepDelay)) + geom_bar(stat='identity')+ggtitle(i)+scale_fill_brewer(palette='Blues')
+}
+do.call(grid.arrange,p)
+
+```
+
+Each of the above charts each correspond to a single month.
+- TYS had the greatest departure delay overall, but it seems like the majority of their extreme delays are in January or March. This seasonality might relate to military operations.
+- IAD is the worst origin in terms of departure delay in October, May, and September, but it also appears in the high frequency
+
+There are many conclusiosn we can draw from this, and two high level conclusions stand out. First, airports that have a military component often experience higher delays. 
+
+
+# Question 2
+
+##Author Attribution
+
+First, we use Naive Bayes to predict the author of the test data.
+```{r}
+
+library(tm) 
+library(magrittr)
+library(class)
+library(caret)
+library(e1071)
+
+
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+
+train = "C:/Users/Gihani Dissanayake/Documents/R/STA380-master/data/ReutersC50/C50train"
+test = "C:/Users/Gihani Dissanayake/Documents/R/STA380-master/data/ReutersC50/C50test"
+file_list = Sys.glob(paste0(train,'/*/*.txt'))
+file_list_test = Sys.glob(paste0(test,'/*/*.txt'))
+authornames = list.dirs("C:/Users/Gihani Dissanayake/Documents/R/STA380-master/data/ReutersC50/C50train", full.names = FALSE)[-1]
+authornames_test = list.dirs("C:/Users/Gihani Dissanayake/Documents/R/STA380-master/data/ReutersC50/C50test", full.names = FALSE)[-1]
+classificationnames = rep(authornames, each=50)
+authors = lapply(file_list, readerPlain) 
+authors_test = lapply(file_list_test,readerPlain)
+
+mynames = file_list %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+	
+names(authors) = mynames
+my_documents = Corpus(VectorSource(authors))
+
+mynamestest = file_list_test %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+	
+names(authors_test) = mynamestest
+my_documents_test = Corpus(VectorSource(authors_test))
+
+## Some pre-processing/tokenization steps.
+## tm_map just maps some function to every document in the corpus
+
+my_documents = tm_map(my_documents, content_transformer(tolower)) # make everything lowercase
+my_documents = tm_map(my_documents, content_transformer(removeNumbers)) # remove numbers
+my_documents = tm_map(my_documents, content_transformer(removePunctuation)) # remove punctuation
+my_documents = tm_map(my_documents, content_transformer(stripWhitespace)) ## remove excess white-space
+my_documents = tm_map(my_documents, content_transformer(removeWords), stopwords("en"))
+my_documents <- tm_map(my_documents, removeWords, c("character"))
+
+my_documents_test = tm_map(my_documents_test, content_transformer(tolower)) # make everything lowercase
+my_documents_test = tm_map(my_documents_test, content_transformer(removeNumbers)) # remove numbers
+my_documents_test = tm_map(my_documents_test, content_transformer(removePunctuation)) # remove punctuation
+my_documents_test = tm_map(my_documents_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_documents_test = tm_map(my_documents_test, content_transformer(removeWords), stopwords("en"))
+my_documents_test <- tm_map(my_documents_test, removeWords, c("character"))
+
+## create a doc-term-matrix
+DTM_authors = DocumentTermMatrix(my_documents)
+DTM_authors = removeSparseTerms(DTM_authors, 0.95)
+
+## create a doc-term-matrix for test
+DTM_authors_test = DocumentTermMatrix(my_documents_test)
+DTM_authors_test = removeSparseTerms(DTM_authors_test, 0.95)
+
+#Normalize word frequency
+X = as.matrix(DTM_authors)
+X = X/rowSums(X)  # term-frequency weighting
+
+X_test = as.matrix(DTM_authors_test)
+X_test = X_test/rowSums(X_test)
+
+
+# Transform dtm to matrix to data frame - df is easier to work with and create target column
+mat.df <- as.data.frame(X, stringsAsfactors = FALSE)
+mat.df$categorynb <- as.factor(classificationnames)
+
+# Create training 90% and test 10%
+set.seed(1)
+test = sample(1:nrow(mat.df),nrow(mat.df)/10)
+train =(-test)
+
+# Transform dtm to matrix to data frame - df is easier to work with and create target column
+mat.df.test <- as.data.frame(X_test, stringsAsfactors = FALSE)
+mat.df.test$categorynb <- as.factor(classificationnames)
+
+#Create model, use laplace = 1 to smooth
+model <- naiveBayes(categorynb ~ ., data = mat.df[train,], laplace = 1)
+#run model against withheld validation data
+preds <- predict(model, newdata = mat.df[test,])
+conf.mat <- confusionMatrix(preds, mat.df[test,]$categorynb)
+conf.mat$overall['Accuracy']
+
+#run model against test data
+preds_test <- predict(model, newdata = mat.df.test)
+conf.mat.test <- confusionMatrix(preds_test, mat.df.test$categorynb)
+conf.mat.test$overall['Accuracy']
+```
+Using Naive Bayes, we get a in-sample (train) accuracy of 75%, but our out-of-sample (test) accuracy is about 50%. This is fairly accurate, considering authors can write about any number of things, and every article adds dimensionality. We prefer this model, as it is significantly more accurate than randomly guessing or KNN, which we found works with the train data, but not so much the test data. 
+
+Second, we tried PCA to predict the author names.
+```{r}
+library(ggplot2)
+set.seed(1)
+
+# Now PCA on term frequencies
+X = as.matrix(DTM_authors)
+X = X/rowSums(X)  # term-frequency weighting
+X=cbind(X,classificationnames)
+
+##Make test data
+X_test <- as.data.frame(X_test, stringsAsfactors = FALSE)
+X_test=cbind(X_test,classificationnames)
+Z_test=X_test[,1:801] #taking out author
+Z_test<-mapply(Z_test,FUN=as.numeric)
+Z_test<-matrix(data=Z_test, ncol=801, nrow=2500)
+Z_test <- as.data.frame(Z_test, stringsAsfactors = FALSE)
+
+Z=X[,1:801] #taking out author
+Z<-mapply(Z,FUN=as.numeric)
+Z<-matrix(data=Z, ncol=801, nrow=2500)
+
+pc = prcomp(Z, scale.=TRUE)
+names(pc)
+#summary(pc) #801 pc's
+plot(pc)
+biplot(pc)
+loadings = pc$rotation
+scores = pc$x
+qplot(scores[,1], scores[,2], color=X[,802], xlab='Component 1', ylab='Component 2')
+```
+As you can see, PCA is an excellent tool for visualizing the complex nature of having so many authors and so many text options. It is not surprising that the first two, or even first five, principle components are not enough to clearly distinguish between authors.
+
+```{r}
+library(rpart)
+#rpart.model <- rpart(Z_test$Author ~ .,data = Z_test, method = "anova")
+#rpart.model
+
+#transform test into PCA
+#test.data <- predict(pc, newdata = Z_test)
+#test.data <- as.data.frame(test.data)
+
+#select the first 30 components
+#test.data <- test.data[,1:30]
+
+#make prediction on test data
+#rpart.prediction <- predict(rpart.model, test.data)
+
+```
+We tried to make the prediction work in many different ways. We could not. However, we could explain many many things that did not work.
+
+#Question 3
+
+###Practice With Association Rule Mining
+
+Question: Pick your own thresholds for lift and confidence; just be clear what these thresholds are and how you picked them. Do your discovered item sets make sense? Present your discoveries in an interesting and concise way.
+
+Answer: 
+```{r}
+library(arules)
+library(arulesViz)
+
+grocery <- read.transactions('https://raw.githubusercontent.com/jgscott/STA380/master/data/groceries.txt', sep=',')
+summary(grocery)
+inspect(grocery[1:5])
+
+itemFrequencyPlot(grocery, topN = 20) 
+
+rules <- apriori(grocery, parameter=list(support=0.01, confidence=0.5, maxlen=6))
+inspect(rules[1:5])
+
+inspect(subset(rules, subset=confidence > 0.8))
+summary(rules)
+
+
+```
+
+After reading in the grocery dataset, we first look at the item frequency plot to look at frequent items. We randomly chosen support of 0.01 and confidence of 0.5 values to start off, but we will try different values pairs to see which balance of values will result in the number of rules that will be most beneficial for our analysis. 
+
+The items with the highest relative frequency of occurance are not surprising, as they are all items that are commonly purchased. Additionally, adise from drinks and shopping bags, all of the items with the highest frequencies are pershable, and thus need to be replaced more often. 
+
+Support = Number of transactions with both A and B / Total number of transactions=P(A∩B)
+
+Confidence = Number of transactions with both A and B / Total number of transactions with A=P(A∩B) / P(A)
+
+Expected Confidence = Number of transactions with B / Total number of transactions=P(B)
+
+Lift=Confidence / Expected Confidence = P(A∩B) / P(A)*P(B)
+
+### Interactive Inspect With Datatable
+
+Here we can experiment with different Support and Confidence values. By maintaining the Data Table form, we can see different sets for market basket analysis. When we set rules3 with support of 0.01 and confidence of 0.5, we can see 15 entries that show LHS of curd, yogurt, butter, eggs, whipped/sour cream, before buying whole milk (RHS), which makes sense as they all need to be refrigerated and therefore probably located closer together. Rules4 with support of 0.001 and confidence of 0.8 reveal much bigger datatable with 410 entries that reveal liquor, red/blush wine purchased with bottled beer which are all alcohol and make sense to buy them together and also reveals cereal as part of the pairs before buying whole milk. 
+
+As we perform more visualizations to find patterns within these baskets as well as setting different rules, we will re-adjust our confidence and support values to maximize the effectiveness of our analysis. 
+
+```{r}
+rules3 <- apriori(grocery, parameter=list(support=0.01, confidence=0.5))
+rules4 <- apriori(grocery, parameter=list(support=0.001, confidence=0.8))
+inspectDT(rules3) #if we want highest support 15 entries 
+inspectDT(rules4) #if we want wider association with 410 entries
+```
+
+
+
+### Visualizations
+
+```{r}
+rules_sorted <- sort(rules, by='confidence', decreasing=TRUE)
+#matrix representation
+#plot(rules[1:20], method = 'matrix', control = list(reorder=TRUE))
+
+#Interactive Scatterplot 
+plotly_arules(rules)
+
+#plot(rules, method = 'graph', interactive=TRUE, shading=NA)
+subrules <- head(sort(rules, by='lift'),10) #Graph just 10 rules by 10 highest lifts 
+plot(subrules, method='graph')
+plot(rules, method='grouped') #Grouped Matrix shows LHS and RHS 
+plot(subrules,method='paracoord', control=list(reorder=TRUE)) #Parallel Coordinates plot for 10 rules 
+
+```
+
+The lift for {tropical fruit, root vegetables}-->{other vegetables} is very high. This means there is a strong association between these things. If we know a person bought tropical fruit and root vegetables, the person is much more likley to buy other vegetables. 
+The support for {other vegetables,yogurt}-->{whole milk} is very high. This means there is a large proportion of all baskets that had all three of these items.
+
+People tend to buy semi finished breads and margarine before ready soups 
+so we should put those items close to the ready soups isle. 
+Also, people tend to buy citrus fruit, soda, canned/bottled beer, and shopping bags before they buy margarine and ready soups. 
+
+When they buy whole milk together with ready soups, they tend to buy other vegetables. 
+Also, people tend to buy baking powder, sugar, flour, and eggs before buying margarine, which sounds like they are buying items for baking. 
+
+
+### Getting the product recommendation rules
+
+```{r}
+rules_conf <- sort(rules, by='confidence', decreasing=TRUE)
+inspect(head(rules_conf)) #High-confidence rules
+
+rules_lift <- sort(rules, by='lift', decreasing=TRUE)
+inspect(head(rules_lift)) #High lift rules 
+```
+
+The rules with confidence of 1 imply that, whenever the LHS item was purchased, the RHS item was also purchased 100% of the time.
+So in our grocery rules, if one buys citrus fruit and root vegetables, there's 58.6% chance they will buy other vegetables. 
+
+A rule with a lift of 3 implies that, the items in LHS and RHS are 3 times more likely to be purchased together compared to the purchases when they are assumed to be unrelated, which is for the same LHS-RHS pair of {citrus fruit, root vegetables} -> {other vegetables}.
+
+### Targeting Items 
+- What are customers likely to buy before or after this item? What are people buying before they buy margarine?
+
+Tend to buy bottled water, eggs, and tropic fruit. Flour and tropical fruit as lhs scored higher on support and slightly less confidence, so we consider this as well when placing items on isles or for target coupon marketing. 
+
+```{r}
+rules <- apriori(data=grocery, parameter=list(supp=0.001, conf=0.08), appearance = list(default = 'lhs', rhs = 'margarine'), control=list(verbose=F))
+rules <- sort(rules, decreasing=TRUE, by='confidence')
+inspect(rules[1:5])
+```
+
+What are people buying after they buy margarine? 
+```{r}
+rules2 <- apriori(data=grocery, parameter=list(supp=0.01, conf=0.1), appearance = list(default = 'rhs', lhs = 'margarine'), control=list(verbose=F))
+rules2 <- sort(rules2, by='confidence', decreasing=TRUE)
+inspect(rules2)
+```
+
+They tend to buy whole milk, other vegetables, rolls/buns, and yogurt after buying margarine. Whole milk and yogurt should be placed in the dairy section near margarine, so this chain association does make sense. 
