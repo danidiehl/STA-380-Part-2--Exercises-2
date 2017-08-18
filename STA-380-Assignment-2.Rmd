@@ -1,0 +1,205 @@
+---
+title: "STA-380-Assignment-2"
+author: "Jess Chung, Dani Diehl, Gihani Dissanayake, Chloe Kwon"
+date: "August 16, 2017"
+output: html_document
+---
+
+
+## Question 1: Flights at ABIA
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(tidyr)
+
+abia <- read.csv("https://raw.githubusercontent.com/jgscott/STA380/master/data/ABIA.csv")
+abia$Turnaround <- abia$ArrDelay - abia$DepDelay
+abia[is.na(abia)] <- 0
+abiaorigin <- filter(abia, Origin =="AUS")
+abiaorigin <- abiaorigin[(abiaorigin$Dest != "DSM")&(abiaorigin$Dest != "DTW"),]
+
+#abiadest <- filter(abia, Dest =="AUS")
+airports <- read.csv("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat", header = FALSE)
+colnames(airports) <- c("ID", "name", "city", "country", "IATA_FAA", "ICAO", "lat", "lon", "altitude", "timezone", "DST")
+
+
+airportlatlon <- subset(airports, select = c(IATA_FAA, lat, lon))
+
+abiaorigin = merge(abiaorigin, airportlatlon, by.x = "Dest", by.y = "IATA_FAA")
+#abiadest = merge(abiadest, airportlatlon, by.x = "Origin", by.y = "IATA_FAA")
+origindata = abiaorigin[,c("lat","lon","Turnaround","Month")]
+average = aggregate(origindata[, 3], list(origindata$lat, origindata$lon), mean)
+origindataturnaround = merge(origindata, average, by.x = c("lat","lon"), by.y = c("Group.1","Group.2"))
+
+abialatlon <- filter(airportlatlon, IATA_FAA=="AUS") #separate df for abia
+
+usa <- map_data("usa")
+origin <- gather(data = origindataturnaround, -lon, -lat, -x, -Turnaround, key = "var", value = "value")
+ggplot() + geom_polygon(data = usa, aes(x=long, y = lat, group = group)) + coord_fixed(1.3) + 
+geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abialatlon$lat, col = x), size = .01, curvature = .2) + 
+ geom_point(data=origin, aes(x = lon, y = lat), col = "red", shape = ".") + scale_colour_gradient2()# + facet_wrap(~value, scales = "free")
+ 
+```
+
+Q: Is the late departure caused from the late arrival? Or did the airport contribute to make the delay time worse? 
+What this is showing us is the number of minutes the airport contributes to a delay. If the average number is very negative, this means the airport is contributing a lot of time to the delay. Redder curves have a slower turnaround time at AUS, purple-er times have a faster turnaround time. Ie, the one flight to Des Moines had a super fast turnaround time, while the flights to Detroit on average have a slower turnaround time. 
+
+## Q2: 
+
+```{r}
+
+library(tm) 
+library(magrittr)
+
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+
+pathname= "/Users/daniellediehl/Documents/MSBA/Predictive_Modeling/STA380/data/ReutersC50"
+#pathname = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/"
+train = paste(pathname,"C50train/", sep="")					
+authors = list.dirs(train, full.names = FALSE)[-1]
+
+for(author in authors){
+  nam <- paste("articles_", author, sep = "")
+  file = paste(train,author,"/*.txt",sep="")
+  assign(nam, Sys.glob(file))
+  assign(author, lapply(eval(parse(text = nam)),readerPlain))
+  nam2 <- paste("names_", author, sep="")
+  assign(nam2, eval(parse(text = nam)) %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist)
+  assign(author,setNames(as.list(eval(parse(text = author))), eval(parse(text = nam2))))
+  docs <- paste(author,"_documents", sep="")
+  assign(docs, Corpus(VectorSource(eval(parse(text = author)))))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(tolower)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeNumbers)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removePunctuation)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(stripWhitespace)))
+  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), stopwords("en")))
+  dtm <- paste("dtm_",author,sep="")
+  assign(dtm, DocumentTermMatrix(eval(parse(text=docs))))
+  #assign(dtm, removeSparseTerms(eval(parse(text=docs)),0.95))
+    }
+```
+
+##Q3. Practice with association rule mining
+
+Question: Pick your own thresholds for lift and confidence; just be clear what these thresholds are and how you picked them. Do your discovered item sets make sense? Present your discoveries in an interesting and concise way.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(arules)
+library(arulesViz)
+```
+
+Answer: 
+```{r}
+grocery <- read.transactions('https://raw.githubusercontent.com/jgscott/STA380/master/data/groceries.txt', sep=',')
+summary(grocery)
+inspect(grocery[1:5])
+
+itemFrequencyPlot(grocery, topN = 20) 
+
+rules <- apriori(grocery, parameter=list(support=0.01, confidence=0.5, maxlen=6))
+inspect(rules[1:5])
+
+inspect(subset(rules, subset=confidence > 0.8))
+summary(rules)
+
+
+```
+
+After reading in the grocery dataset, we first look at the item frequency plot to look at frequent items. We randomly chosen support of 0.01 and confidence of 0.5 values to start off, but we will try different values pairs to see which balance of values will result in the number of rules that will be most beneficial for our analysis. 
+
+
+Support = Number of transactions with both A and B / Total number of transactions=P(A∩B)
+
+Confidence = Number of transactions with both A and B / Total number of transactions with A=P(A∩B) / P(A)
+
+Expected Confidence = Number of transactions with B / Total number of transactions=P(B)
+
+Lift=Confidence / Expected Confidence = P(A∩B) / P(A)*P(B)
+
+#### Interactive inspect with datatable
+
+So here we can play around with different set of values for support and confidence to see in datatable form to see different pairs for market basket analysis. When we set rules3 with support of 0.01 and confidence of 0.5, we can see 15 entries that show LHS of curd, yogurt, butter, eggs, whipped/sour cream, before buying whole milk (RHS), which makes sense as they all need to be refrigerated and therefore probably located closer together. Rules4 with support of 0.001 and confidence of 0.8 reveal much bigger datatable with 410 entries that reveal liquor, red/blush wine purchased with bottled beer which are all alcohol and make sense to buy them together and also reveals cereal as part of the pairs before buying whole milk. 
+
+As we perform more visualizations to find patterns within these baskets as well as setting different rules, we will re-adjust our confidence and support values to maximize the effectiveness of our analysis. 
+
+```{r}
+rules3 <- apriori(grocery, parameter=list(support=0.01, confidence=0.5))
+rules4 <- apriori(grocery, parameter=list(support=0.001, confidence=0.8))
+inspectDT(rules3) #if we want highest support 15 entries 
+inspectDT(rules4) #if we want wider association with 410 entries
+```
+#### Visualizations
+
+```{r}
+rules_sorted <- sort(rules, by='confidence', decreasing=TRUE)
+#matrix representation
+#plot(rules[1:20], method = 'matrix', control = list(reorder=TRUE))
+
+#Interactive Scatterplot 
+plotly_arules(rules)
+
+#plot(rules, method = 'graph', interactive=TRUE, shading=NA)
+subrules <- head(sort(rules, by='lift'),10) #Graph just 10 rules by 10 highest lifts 
+plot(subrules, method='graph')
+plot(rules, method='grouped') #Grouped Matrix shows LHS and RHS 
+plot(subrules,method='paracoord', control=list(reorder=TRUE)) #Parallel Coordinates plot for 10 rules 
+
+```
+
+The lift for {tropical fruit, root vegetables}-->{other vegetables} is very high. This means there is a strong association between these things. If we know a person bought tropical fruit and root vegetables, the person is much more likley to buy other vegetables. 
+The support for {other vegetables,yogurt}-->{whole milk} is very high. This means there is a large proportion of all baskets that had all three of these items.
+
+People tend to buy semi finished breads and margarine before ready soups 
+so we should put those items close to the ready soups isle. 
+Also, people tend to buy citrus fruit, soda, canned/bottled beer, and shopping bags before they buy margarine and ready soups. 
+When they buy whole milk together with ready soups, they tend to buy other vegetables. 
+Also, people tend to buy baking powder, sugar, flour, and eggs before buying margarine, which sounds like they are buying items for baking. 
+
+
+#### Getting the product recommendation rules
+
+```{r}
+rules_conf <- sort(rules, by='confidence', decreasing=TRUE)
+inspect(head(rules_conf)) #High-confidence rules
+
+rules_lift <- sort(rules, by='lift', decreasing=TRUE)
+inspect(head(rules_lift)) #High lift rules 
+```
+
+The rules with confidence of 1 imply that, whenever the LHS item was purchased, the RHS item was also purchased 100% of the time.
+So in our grocery rules, if one buys citrus fruit and root vegetables, there's 58.6% chance they will buy other vegetables. 
+
+A rule with a lift of 3 implies that, the items in LHS and RHS are 3 times more likely to be purchased together compared to the purchases when they are assumed to be unrelated, which is for the same LHS-RHS pair of {citrus fruit, root vegetables} -> {other vegetables}.
+
+#### Targeting Items 
+- What are customers likely to buy before or after this item? What are people buying before they buy margarine?
+
+Tend to buy bottled water, eggs, and tropic fruit. Flour and tropical fruit as lhs scored higher on support and slightly less confidence, so we consider this as well when placing items on isles or for target coupon marketing. 
+
+```{r}
+rules <- apriori(data=grocery, parameter=list(supp=0.001, conf=0.08), appearance = list(default = 'lhs', rhs = 'margarine'), control=list(verbose=F))
+rules <- sort(rules, decreasing=TRUE, by='confidence')
+inspect(rules[1:5])
+```
+
+What are people buying after they buy margarine? 
+```{r}
+rules2 <- apriori(data=grocery, parameter=list(supp=0.01, conf=0.1), appearance = list(default = 'rhs', lhs = 'margarine'), control=list(verbose=F))
+rules2 <- sort(rules2, by='confidence', decreasing=TRUE)
+inspect(rules2)
+```
+
+They tend to buy whole milk, other vegetables, rolls/buns, and yogurt after buying margarine. Whole milk and yogurt should be placed in the dairy section near margarine, so this chain association does make sense. 
+
