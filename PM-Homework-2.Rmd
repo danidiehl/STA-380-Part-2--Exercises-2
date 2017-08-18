@@ -52,54 +52,99 @@ geom_curve(data=origin, aes(x = lon, y = lat, xend = abialatlon$lon, yend = abia
 
 library(tm) 
 library(magrittr)
+library(class)
+library(caret)
+library(e1071)
 
 
 readerPlain = function(fname){
 				readPlain(elem=list(content=readLines(fname)), 
 							id=fname, language='en') }
 
-#Also, be sure to change the name of Lynne O'Donnell to remove the apostrophe
-pathname = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/"
-train = paste(pathname,"C50train/", sep="")
-test =paste(pathname,"C50test/", sep="")
-authors = list.dirs(train, full.names = FALSE)[-1]
-list_dtms_strings = c()
-#For each author, create a corpus/document term matrix with removed sparse terms
-for(author in authors){
-  nam <- paste("articles_", author, sep = "")
-  file = paste(train,author,"/*.txt",sep="")
-  assign(nam, Sys.glob(file))
-  assign(author, lapply(eval(parse(text = nam)),readerPlain))
-  nam2 <- paste("names_", author, sep="")
-  assign(nam2, eval(parse(text = nam)) %>%
+train = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/C50train"
+test = "C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/C50test"
+file_list = Sys.glob(paste0(train,'/*/*.txt'))
+file_list_test = Sys.glob(paste0(test,'/*/*.txt'))
+authornames = list.dirs("C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/C50train", full.names = FALSE)[-1]
+authornames_test = list.dirs("C:/users/jessc/documents/STA-380-Part-2--Exercises-2/data/ReutersC50/C50test", full.names = FALSE)[-1]
+classificationnames = rep(authornames, each=50)
+authors = lapply(file_list, readerPlain) 
+authors_test = lapply(file_list_test,readerPlain)
+
+mynames = file_list %>%
 	{ strsplit(., '/', fixed=TRUE) } %>%
 	{ lapply(., tail, n=2) } %>%
 	{ lapply(., paste0, collapse = '') } %>%
-	unlist)
-  assign(author,setNames(as.list(eval(parse(text = author))), eval(parse(text = nam2))))
-  docs <- paste(author,"_documents", sep="")
-  assign(docs, Corpus(VectorSource(eval(parse(text = author)))))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(tolower)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeNumbers)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removePunctuation)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(stripWhitespace)))
-  assign(docs, tm_map(eval(parse(text = docs)), content_transformer(removeWords), c(stopwords("SMART"),"character")))
-  dtm <- paste("dtm_",author,sep="")
-  assign(dtm, TermDocumentMatrix(eval(parse(text=docs)), control = list(wordLengths = c(3,10))))
-  assign(dtm, removeSparseTerms(eval(parse(text=dtm)),0.95))
-  list_dtms_strings <-  append(list_dtms_strings, dtm)
-    }
-#
+	unlist
+	
+names(authors) = mynames
+my_documents = Corpus(VectorSource(authors))
 
-list_dtms1 <- lapply(1:length(list_dtms_strings), function(x) eval(parse(text=list_dtms_strings[x])))
-top_words1 <- lapply(1:length(list_dtms1), function(x)  sort(rowSums(as.matrix(list_dtms1[[x]])), decreasing=TRUE))
+mynamestest = file_list_test %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+	
+names(authors_test) = mynamestest
+my_documents_test = Corpus(VectorSource(authors_test))
 
-library(plyr)
-top_words_df <- t(ldply(1:length(top_words1), function(i)  head(names(top_words1[[i]]),20)))
-colnames(top_words_df) <- lapply(1:length(list_dtms1), function(i) list_dtms_strings[i])
+## Some pre-processing/tokenization steps.
+## tm_map just maps some function to every document in the corpus
 
-#Returns top 20 words for each author
-top_words_df
+my_documents = tm_map(my_documents, content_transformer(tolower)) # make everything lowercase
+my_documents = tm_map(my_documents, content_transformer(removeNumbers)) # remove numbers
+my_documents = tm_map(my_documents, content_transformer(removePunctuation)) # remove punctuation
+my_documents = tm_map(my_documents, content_transformer(stripWhitespace)) ## remove excess white-space
+my_documents = tm_map(my_documents, content_transformer(removeWords), stopwords("en"))
+my_documents <- tm_map(my_documents, removeWords, c("character"))
 
+my_documents_test = tm_map(my_documents_test, content_transformer(tolower)) # make everything lowercase
+my_documents_test = tm_map(my_documents_test, content_transformer(removeNumbers)) # remove numbers
+my_documents_test = tm_map(my_documents_test, content_transformer(removePunctuation)) # remove punctuation
+my_documents_test = tm_map(my_documents_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_documents_test = tm_map(my_documents_test, content_transformer(removeWords), stopwords("en"))
+my_documents_test <- tm_map(my_documents_test, removeWords, c("character"))
+
+## create a doc-term-matrix
+DTM_authors = DocumentTermMatrix(my_documents)
+DTM_authors = removeSparseTerms(DTM_authors, 0.95)
+
+## create a doc-term-matrix for test
+DTM_authors_test = DocumentTermMatrix(my_documents_test)
+DTM_authors_test = removeSparseTerms(DTM_authors_test, 0.95)
+
+#Normalize word frequency
+X = as.matrix(DTM_authors)
+X = X/rowSums(X)  # term-frequency weighting
+
+X_test = as.matrix(DTM_authors_test)
+X_test = X_test/rowSums(X_test)
+
+
+# Transform dtm to matrix to data frame - df is easier to work with and create target column
+mat.df <- as.data.frame(X, stringsAsfactors = FALSE)
+mat.df$categorynb <- as.factor(classificationnames)
+
+# Create training 90% and test 10%
+set.seed(1)
+test = sample(1:nrow(mat.df),nrow(mat.df)/10)
+train =(-test)
+
+# Transform dtm to matrix to data frame - df is easier to work with and create target column
+mat.df.test <- as.data.frame(X_test, stringsAsfactors = FALSE)
+mat.df.test$categorynb <- as.factor(classificationnames)
+
+#Create model, use laplace = 1 to smooth
+model <- naiveBayes(categorynb ~ ., data = mat.df[train,], laplace = 1)
+#run model against withheld validation data
+preds <- predict(model, newdata = mat.df[test,])
+conf.mat <- confusionMatrix(preds, mat.df[test,]$categorynb)
+conf.mat$overall['Accuracy']
+
+#run model against test data
+preds_test <- predict(model, newdata = mat.df.test)
+conf.mat.test <- confusionMatrix(preds_test, mat.df.test$categorynb)
+conf.mat.test$overall['Accuracy']
 
 ```
