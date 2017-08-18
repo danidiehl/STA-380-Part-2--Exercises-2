@@ -41,6 +41,11 @@ DTM_authors # some basic summary statistics
 DTM_authors = removeSparseTerms(DTM_authors, 0.95)
 
 
+
+####### GIHANI- FROM HERE######
+
+library(ggplot2)
+
 # Now PCA on term frequencies
 X = as.matrix(DTM_authors)
 X = X/rowSums(X)  # term-frequency weighting
@@ -58,24 +63,26 @@ biplot(pc)
 loadings = pc$rotation
 scores = pc$x
 qplot(scores[,1], scores[,2], color=X[,802], xlab='Component 1', ylab='Component 2')
-library(ggplot2)
+
+#####TO HERE################
+
 
 
 #maybe try regression on the first 10 pc's? 
 
-library(pls)
+#library(pls)
 # Transform dtm to matrix to data frame - df is easier to work with
-mat.df <- as.data.frame(data.matrix(DTM_authors), stringsAsfactors = FALSE)
-mat.df2<-as.data.frame(X, stringsAsFactors = FALSE)
+#mat.df <- as.data.frame(data.matrix(DTM_authors), stringsAsfactors = FALSE)
+#mat.df2<-as.data.frame(X, stringsAsFactors = FALSE)
 # Column bind category (known classification)
-mat.df$category <- classificationnames
+#mat.df$category <- classificationnames
 
 
-pcr_model<- pcr(classificationnames~.,data=mat.df2, scale=TRUE, validation='CV')
+#pcr_model<- pcr(classificationnames~.,data=mat.df2, scale=TRUE, validation='CV')
 
 
-pcr_pred<- predict(pcr_model, test_data, ncomp=3)
-mean((pcr_pred-y_test)^2)
+#pcr_pred<- predict(pcr_model, test_data, ncomp=3)
+#mean((pcr_pred-y_test)^2)
 
 
 
