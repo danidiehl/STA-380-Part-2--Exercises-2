@@ -64,7 +64,18 @@ library(ggplot2)
 #maybe try regression on the first 10 pc's? 
 
 library(pls)
-library()
+# Transform dtm to matrix to data frame - df is easier to work with
+mat.df <- as.data.frame(data.matrix(DTM_authors), stringsAsfactors = FALSE)
+mat.df2<-as.data.frame(X, stringsAsFactors = FALSE)
+# Column bind category (known classification)
+mat.df$category <- classificationnames
+
+
+pcr_model<- pcr(classificationnames~.,data=mat.df2, scale=TRUE, validation='CV')
+
+
+pcr_pred<- predict(pcr_model, test_data, ncomp=3)
+mean((pcr_pred-y_test)^2)
 
 
 
